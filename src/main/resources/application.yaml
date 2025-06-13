@@ -1,0 +1,20 @@
+mail:
+  host: smtp.gmail.com
+  port: 587
+  from: ${MAIL_FROM}
+  to: ${MAIL_TO}
+  username: ${MAIL_USERNAME}
+  password: ${MAIL_PASSWORD}
+
+spring:
+  application:
+    name: TrackLore
+  datasource:
+    url: ${DB_URL}
+    driver-class-name: org.h2.Driver
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD:}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
