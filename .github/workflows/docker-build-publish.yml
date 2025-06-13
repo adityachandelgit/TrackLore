@@ -1,0 +1,127 @@
+name: Build, Tag, and Push to GitHub Container Registry
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Set up QEMU for multi-arch builds
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Get Latest Master Version
+        id: get_version
+        run: |
+          latest_tag=$(git tag --list "v*" --sort=-v:refname | head -n 1)
+          latest_tag=${latest_tag:-"v0.0.0"}
+          echo "latest_tag=$latest_tag" >> $GITHUB_ENV
+          echo "Latest master tag: $latest_tag"
+
+      - name: Determine Version Bump (Only for Master)
+        if: github.ref == 'refs/heads/master'
+        id: determine_bump
+        run: |
+          pr_number=$(gh pr list --state merged --base master --limit 1 --json number --jq '.[0].number')
+          labels=$(gh pr view "$pr_number" --json labels --jq '.labels[].name' || echo "")
+          if echo "$labels" | grep -q 'major'; then
+            bump="major"
+          elif echo "$labels" | grep -q 'minor'; then
+            bump="minor"
+          elif echo "$labels" | grep -q 'patch'; then
+            bump="patch"
+          fi
+
+          if [ -z "$bump" ]; then
+            last_commit_msg=$(git log -1 --pretty=%B)
+            if echo "$last_commit_msg" | grep -iq '#major'; then
+              bump="major"
+            elif echo "$last_commit_msg" | grep -iq '#minor'; then
+              bump="minor"
+            elif echo "$last_commit_msg" | grep -iq '#patch'; then
+              bump="patch"
+            else
+              bump="patch"
+            fi
+          fi
+          echo "bump=$bump" >> $GITHUB_ENV
+          echo "Version bump type: $bump"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auto-Increment Version (Only for Master)
+        if: github.ref == 'refs/heads/master'
+        id: bump_version
+        run: |
+          old_version="${{ env.latest_tag }}"
+          IFS='.' read -r -a parts <<< "${old_version//[!0-9.]/}"
+          if [ "${{ env.bump }}" = "major" ]; then
+            new_version="$((parts[0] + 1)).0.0"
+          elif [ "${{ env.bump }}" = "minor" ]; then
+            new_version="${parts[0]}.$((parts[1] + 1)).0"
+          else
+            new_version="${parts[0]}.${parts[1]}.$((parts[2] + 1))"
+          fi
+          new_tag="v${new_version}"
+          echo "new_tag=$new_tag" >> $GITHUB_ENV
+          echo "New version: $new_tag"
+
+      - name: Generate Image Tag
+        id: set_image_tag
+        run: |
+          branch="${GITHUB_REF#refs/heads/}"
+          if [[ "$branch" == "master" ]]; then
+            image_tag="${{ env.new_tag }}"
+          elif [[ "$branch" == "develop" ]]; then
+            short_sha=$(git rev-parse --short HEAD)
+            image_tag="${{ env.latest_tag }}-develop-${short_sha}"
+          else
+            short_sha=$(git rev-parse --short HEAD)
+            image_tag="${short_sha}"
+          fi
+          echo "image_tag=$image_tag" >> $GITHUB_ENV
+          echo "Image tag: $image_tag"
+
+      - name: Create Git Tag (Only for Master)
+        if: github.ref == 'refs/heads/master'
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git tag ${{ env.new_tag }}
+          git push origin ${{ env.new_tag }}
+
+      - name: Build and Push Docker Image
+        run: |
+          docker buildx create --use
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg APP_VERSION=${{ env.image_tag }} \
+            --tag ghcr.io/${{ github.actor }}/tracklore-app:${{ env.image_tag }} \
+            --push .
+
+      - name: Push Latest Tag (Only for Master)
+        if: github.ref == 'refs/heads/master'
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --tag ghcr.io/${{ github.actor }}/tracklore-app:latest \
+            --push .
