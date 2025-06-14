@@ -1,8 +1,19 @@
+version: '3.8'
+
 services:
   tracklore:
+    container_name: tracklore
     image: localhost:5000/tracklore-app-1:latest
     ports:
       - "8888:8080"
       - "9999:9092"
     volumes:
       - ./tracklore-data:/data
+    environment:
+      - MAIL_FROM=${MAIL_FROM}
+      - MAIL_TO=${MAIL_TO}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - DB_URL=${DB_URL}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}

@@ -30,13 +30,7 @@ public class CampsiteTrackingUpdaterService {
 
     private static final String NOTIFY_EMAIL = "aditya.chandel101@gmail.com";
 
-    @PostConstruct
-    public void onStartup() {
-        log.info("Running campsite status refresh on startup...");
-        refreshTrackedCampsiteStatuses();
-    }
-
-    @Scheduled(cron = "0 0 2 * * ?")
+    @Scheduled(cron = "0 0/15 * * * ?")
     @Transactional
     public void refreshTrackedCampsiteStatuses() {
         log.info("Starting scheduled refresh of campsite statuses");

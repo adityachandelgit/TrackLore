@@ -7,13 +7,19 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
-@RequestMapping("/api/tracking")
+@RequestMapping("/api/v1/tracking")
 @RequiredArgsConstructor
 public class CampsiteTrackingController {
 
     private final CampsiteTrackingService service;
+
+    @GetMapping
+    public Map<String, List<CampsiteTrackingEntity>> listAllCampgroundsWithCampsites() {
+        return service.getAllGroupedByCampground();
+    }
 
     @PostMapping
     public void trackSelected(@RequestBody CampsiteTrackingRequest request) {

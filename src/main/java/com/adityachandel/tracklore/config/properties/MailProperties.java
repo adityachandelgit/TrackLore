@@ -13,6 +13,7 @@ public class MailProperties {
     private String username;
     private String password;
     private String from;
+    private String to;
     private boolean auth = true;
     private boolean starttls = true;
 }

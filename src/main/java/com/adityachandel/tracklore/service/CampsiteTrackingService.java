@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -17,6 +19,11 @@ import java.util.List;
 public class CampsiteTrackingService {
 
     private final CampsiteTrackingRepository repository;
+
+    public Map<String, List<CampsiteTrackingEntity>> getAllGroupedByCampground() {
+        return repository.findAll().stream()
+                .collect(Collectors.groupingBy(CampsiteTrackingEntity::getCampgroundId));
+    }
 
     public void trackSelectedCampsites(CampsiteTrackingRequest request) {
         try {
