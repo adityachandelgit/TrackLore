@@ -2,6 +2,7 @@ package com.adityachandel.tracklore.service;
 
 import com.adityachandel.tracklore.model.dto.CampsiteAvailabilityResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -12,6 +13,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 
 @Service
+@Slf4j
 public class CampsiteAvailabilityService {
 
     private final HttpClient httpClient;
@@ -30,6 +32,8 @@ public class CampsiteAvailabilityService {
                     campgroundId, encodedDate
             );
 
+            log.info("Fetching availability for campground [{}], startDate [{}]", campgroundId, startDateIso);
+
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("accept", "application/json, text/plain, */*")
@@ -41,18 +45,15 @@ public class CampsiteAvailabilityService {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 200) {
-                CampsiteAvailabilityResponse value = objectMapper.readValue(response.body(), CampsiteAvailabilityResponse.class);
-                return value;
+                log.debug("Successfully received availability data for campground [{}]", campgroundId);
+                return objectMapper.readValue(response.body(), CampsiteAvailabilityResponse.class);
             } else {
-                System.err.println("HTTP error: " + response.statusCode());
-                System.err.println("Response body: " + response.body());
+                log.warn("Failed to fetch availability for campground [{}]: HTTP {} - {}", campgroundId, response.statusCode(), response.body());
                 return null;
             }
 
         } catch (Exception e) {
-            // Log exception
-            System.err.println("Exception during campsite fetch: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error fetching campsite availability for campground [{}]: {}", campgroundId, e.getMessage(), e);
             return null;
         }
     }

@@ -3,7 +3,6 @@ package com.adityachandel.tracklore.service;
 import com.adityachandel.tracklore.model.dto.CampsiteAvailabilityResponse.Campsite;
 import com.adityachandel.tracklore.model.entity.CampsiteTrackingEntity;
 import com.adityachandel.tracklore.repository.CampsiteTrackingRepository;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -37,11 +36,14 @@ public class CampsiteTrackingUpdaterService {
 
         List<CampsiteTrackingEntity> allTracked = repository.findAll();
         var grouped = groupByCampgroundAndMonth(allTracked);
+
         for (var campgroundEntry : grouped.entrySet()) {
             String campgroundId = campgroundEntry.getKey();
+
             for (var monthEntry : campgroundEntry.getValue().entrySet()) {
                 String yearMonth = monthEntry.getKey();
                 String startDateIso = yearMonth + "-01T00:00:00.000Z";
+
                 try {
                     Thread.sleep(5000);
                     var response = availabilityService.fetchCampsiteAvailability(campgroundId, startDateIso);
@@ -49,8 +51,12 @@ public class CampsiteTrackingUpdaterService {
                         log.warn("No availability for campground {} month {}", campgroundId, yearMonth);
                         continue;
                     }
-                    handleMonthUpdate(campgroundId, monthEntry.getValue(), response.getCampsites());
-                    log.info("Updated campground {} month {}", campgroundId, yearMonth);
+
+                    boolean anyChanges = handleMonthUpdate(campgroundId, monthEntry.getValue(), response.getCampsites());
+                    if (anyChanges) {
+                        log.info("Updated campground {} month {}", campgroundId, yearMonth);
+                    }
+
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     log.warn("Tracking update interrupted");
@@ -72,8 +78,9 @@ public class CampsiteTrackingUpdaterService {
         ));
     }
 
-    private void handleMonthUpdate(String campgroundId, List<CampsiteTrackingEntity> entities, Map<String, Campsite> campsiteMap) {
+    private boolean handleMonthUpdate(String campgroundId, List<CampsiteTrackingEntity> entities, Map<String, Campsite> campsiteMap) {
         List<CampsiteTrackingEntity> becameAvailableList = new ArrayList<>();
+        boolean anyUpdated = false;
 
         for (var entity : entities) {
             Campsite campsite = campsiteMap.get(entity.getCampsiteId());
@@ -108,6 +115,7 @@ public class CampsiteTrackingUpdaterService {
 
             if (updated) {
                 repository.save(entity);
+                anyUpdated = true;
                 if (becameAvailable) {
                     becameAvailableList.add(entity);
                 }
@@ -117,6 +125,8 @@ public class CampsiteTrackingUpdaterService {
         if (!becameAvailableList.isEmpty()) {
             sendBatchAvailabilityAlert(campgroundId, becameAvailableList);
         }
+
+        return anyUpdated;
     }
 
     private <T> boolean updateField(Supplier<T> getter, Consumer<T> setter, T newValue) {
